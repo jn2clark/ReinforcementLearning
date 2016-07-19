@@ -20,6 +20,7 @@ import copy
 import numpy as np
 import random
 from IPython.display import clear_output
+import time
 
 import GameEnv
 
@@ -147,12 +148,14 @@ def train(parameters):
 
     # why did the game terminate
     parameters['term_reasons'] = []
-    dq_errors = []
+    parameters['dq_errors'] = []
 
     dq_errors_added = []
 
     # iterate over the games
     for i in range(parameters['n_games']):
+
+        time_start = time.time()
 
         Game = GameEnv.WhGame(parameters['nx'],parameters['ny'],n_fixes=parameters['n_items'],
                                         n_players=parameters['n_players'],wall_loc=parameters['wall_loc'], 
@@ -211,7 +214,7 @@ def train(parameters):
             # dq error for priority replay
             qval_new = parameters['model'].predict(new_state,batch_size=1)
             dq_error = abs(qval[0][action]-qval_new[0][action]-reward)
-            dq_errors.append(dq_error)
+            parameters['dq_errors'].append(dq_error)
 
             # experience replay
             exp_tuple = (state.copy(), action, reward, new_state.copy(), terminal)
@@ -223,9 +226,11 @@ def train(parameters):
             # add in a hacky way of prioritising replay
             if frame_number > parameters['observe']:
                 # leave some room for the dist width                
-                if dq_error >= 1.1*np.mean(dq_errors[-1000:-1]):  
+                parameters['dq_errors'].pop(0)
+                if dq_error >= 1.1*np.mean(parameters['dq_errors'][-1000:-1]):  
                     parameters['replay'].append(exp_tuple)
                     dq_errors_added.append(dq_error)
+                                        
                     if len(parameters['replay']) > parameters['replay_buffer']:
                         parameters['replay'].pop(0)
 
@@ -280,6 +285,8 @@ def train(parameters):
             print("Avg. items %s" % np.mean(parameters['n_items_collected'][-20:]))
             print("Avg. score %s" % np.mean(parameters['norm_items_collected'][-20:]))
             print("Epsilon %s" % parameters['epsilon'])
+
+        print("Game time %s"% (time.time()-time_start) )
 
         parameters['term_reasons'].append(Game.terminal_reason)
 
