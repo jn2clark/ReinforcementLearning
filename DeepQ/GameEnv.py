@@ -271,7 +271,7 @@ def check_action_history(game, max_actions, state_ind):
         action_history = np.array(game['action_history'][state_ind][-max_actions:])
     else:
         action_history = np.array(game[-max_actions:])
-        
+
     # default return value
     result = False
     # action history
