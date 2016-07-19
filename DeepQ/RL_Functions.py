@@ -24,6 +24,7 @@ import time
 
 import GameEnv
 
+
 def create_model(img_channels, img_rows, img_cols, n_conv1=32, n_conv2=64,
                       n_conv3=64, n_out1=512, n_out2=-1, lr=.001, 
                       n_actions=4, loss='mse'):
@@ -53,14 +54,16 @@ def create_model(img_channels, img_rows, img_cols, n_conv1=32, n_conv2=64,
     model.compile(loss=loss, optimizer=adam(lr=lr))
 
     return model     
-    
+
+
 def save_model(model, m_name):
     """Save keras model to json and weights to h5. """
     
     json_string = model.to_json()
     open(m_name+'.json', 'w').write(json_string)
     model.save_weights(m_name+'.h5')
-    
+
+
 def load_model(m_name, loss='mse', optimizer='adam'):
     """Load keras model from json and h5."""
 
@@ -69,12 +72,11 @@ def load_model(m_name, loss='mse', optimizer='adam'):
     model_l.compile(loss=loss,optimizer=optimizer)
     
     return model_l
-   
-def transfer_dense_weights(model1,model2):
+
+
+def transfer_dense_weights(model1, model2):
     """    
-     Transfer weights for dense layers between keras models.        
-     assume models have same conv filters, maybe diff full connected
-     same number of layers
+     Transfer weights for dense layers between keras models.
      transfer model1 to model2
     """
     for ind in range(len(model2.layers)):
@@ -86,8 +88,9 @@ def transfer_dense_weights(model1,model2):
             except:
                 print('!')
     return model2   
-   
-def transfer_conv_weights(model1,model2):
+
+
+def transfer_conv_weights(model1, model2):
     """    
      Transfer weights for conv layers between keras models.        
      Transfer model1 to model2.
@@ -101,7 +104,8 @@ def transfer_conv_weights(model1,model2):
             except:
                 print('!')
     return model2
-    
+
+
 def transfer_all_weights(model1,model2):
     """ Transfer all weights between keras models"""
     
@@ -124,11 +128,13 @@ def create_duplicate_model(model):
             
     return new_model
 
+
 def add_to_replay(replay, state, action, reward, new_state, replay_buffer, n_times=1):
     # append to replay
     [replay.append((state.copy(), action, reward, new_state.copy())) for ind in range(n_times)]
 
     [replay.pop(0) for ind in range(n_times) if len(replay) > replay_buffer]
+
 
 def train(parameters):
     """
@@ -193,15 +199,16 @@ def train(parameters):
             # could be done here)
             state = Game.game['s_t'][cur_ind].copy().reshape((1,parameters['img_channels'],Game.ny,Game.nx))
 
-            #We are in state S
-            #Let's run our Q function on S to get Q values for all possible actions
+            # We are in state S
+            # Let's run our Q function on S to get Q values for all possible actions
             qval = parameters['model'].predict(state,batch_size=1)
 
-            #choose random action, 4 is for up/down/left/right - 
+            #c hoose random action, 4 is for up/down/left/right -
             # the number of possible moves
             if (random.random() < parameters['epsilon']) or frame_number < parameters['observe']: 
                 action = np.random.randint(0,parameters['n_actions'])
-            else: #choose best action from Q(s,a) values
+            else:
+                # choose best action from Q(s,a) values
                 action = (np.argmax(qval))
 
             # Take action, observe new state S' and get terminal
@@ -295,10 +302,11 @@ def train(parameters):
     return parameters
 
 
-def process_minibatch(model,minibatch,model_target=[],gamma=0.9,
+def process_minibatch(model, minibatch, model_target=[], gamma=0.9,
                          n_actions=4, dbldqn=False):
                              
     """Process the random minibatches and get the update."""
+
     X_train = []
     y_train = []
     # Loop through our batch and create arrays for X and y
@@ -344,7 +352,8 @@ def process_minibatch(model,minibatch,model_target=[],gamma=0.9,
     y_train = np.array(y_train)
 
     return X_train, y_train      
- 
+
+
 def play(parameters):
     """
         Play using the Q network.
@@ -366,7 +375,7 @@ def play(parameters):
     status = 1
     moves_game = 0
 
-    #while game still in progress
+    # while game still in progress
     while(status == 1 and moves_game < parameters['max_moves']):
 
         # game move counter
@@ -387,11 +396,11 @@ def play(parameters):
         # could be done here)
         state = Game.game['s_t'][cur_ind].copy().reshape((1,parameters['img_channels'],Game.ny,Game.nx))
 
-        #We are in state S
-        #Let's run our Q function on S to get Q values for all possible actions
+        # We are in state S
+        # Let's run our Q function on S to get Q values for all possible actions
         qval = parameters['model'].predict(state,batch_size=1)
 
-        #choose random action, 4 is for up/down/left/right - 
+        # choose random action, 4 is for up/down/left/right -
         # the number of possible moves
         if (random.random() < parameters['epsilon_min']): 
             action = np.random.randint(0,parameters['n_actions'])
@@ -402,12 +411,12 @@ def play(parameters):
         # terminal - all items collected, hit wall, hit boundry, repeated actions
         x_t, reward, terminal = Game.frame_step(action, cur_ind)
 
-        # stire the time step
+        # store the time step
         parameters['played_frames'].append(x_t)
-        
 
         # stop playing if we are terminal
-        if terminal: status = 0    
+        if terminal:
+            status = 0
 
     clear_output(wait=True)
     parameters['n_moves_played'] = moves_game

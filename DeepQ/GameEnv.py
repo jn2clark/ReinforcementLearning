@@ -15,17 +15,20 @@ from collections import defaultdict
 def rand_pair(s,ny,nx):
     """ Rand pair of numbers for a rectangle """
     return np.random.randint(s,ny), np.random.randint(s,nx)
-   
+
+
 def update_available(available_loc, unavailable_loc):
     """Return a list of available locations"""
     return [loc for loc in available_loc if loc not in unavailable_loc]
+
 
 def choose_from_available(available_loc, n_loc=1):
     """Randomly choose from the available locations"""
     inds = np.random.choice(len(available_loc),n_loc,replace=False)
 
     return [ available_loc[ind] for ind in inds ]
-  
+
+
 def check_bounds(state,loc):
     """
     Check if the loc is within the bounds of the mxn state.
@@ -39,7 +42,8 @@ def check_bounds(state,loc):
         return False
     else:
         return True  
-  
+
+
 def init_multi_game(nx,ny,n_players=2,n_fixes=5, wall_loc=[]):
     n_fixes_total = n_players*n_fixes
     
@@ -97,7 +101,8 @@ def init_multi_game(nx,ny,n_players=2,n_fixes=5, wall_loc=[]):
     game['pass_thru_fix'] = False    
     
     return game   
-   
+
+
 def update_alternate_and_locs(game):
     """Creates the view for the players"""
     game['wall_alt'] = [game['wall'][ind].copy() for ind in range(game['n_players'])]
@@ -144,15 +149,16 @@ def get_new_loc(player_loc, action):
     #right (column + 1)
     elif action==3:
         new_loc = [player_loc[0], player_loc[1] + 1]
-    
 
     return new_loc
+
 
 def set_loc_value(state,loc,value):
     state[loc[0],loc[1]] = value
     
     return state
-   
+
+
 def frame_step(game, state_ind, action):
    
     # make a move and return
@@ -208,7 +214,8 @@ def convert_RGB_to_Y(array):
     im_out = (0.299*array[0,:,:] + 0.587*array[1,:,:] + 0.114*array[2,:,:])
         
     return im_out.reshape(1,nn[1],nn[2])   
-   
+
+
 def convert_states_RGB_to_Y(game, state_ind=[]):
     """Convert the players states """
     for ind in range(game['n_players']):
@@ -221,12 +228,14 @@ def convert_states_RGB_to_Y(game, state_ind=[]):
         game['x_t'][state_ind].append(game['out'][state_ind].copy())
         
     return game
-    
+
+
 def convert_RGB_to_RGB(array):
     nn = array.shape
     
     return array.reshape(1,nn[0],nn[1],nn[2])      
-    
+
+
 def convert_states_RGB_to_RGB(game, state_ind=[]):
     """Convert the states to RGB"""
     for ind in range(game['n_players']):
@@ -262,6 +271,7 @@ def check_action_history(game, max_actions, state_ind):
         action_history = np.array(game['action_history'][state_ind][-max_actions:])
     else:
         action_history = np.array(game[-max_actions:])
+        
     # default return value
     result = False
     # action history
@@ -287,7 +297,6 @@ def get_st(game, state_ind, n_frames=4):
     game['s_t'][state_ind] = np.concatenate(game['x_t'][state_ind][-n_frames:])
 
     return game
-        
         
 
 class WhGame:
@@ -322,13 +331,13 @@ class WhGame:
         self.pass_thru_fix = pass_thru_fix   
 
         self.wall_loc = wall_loc     
-     
+        self.terminal_reason = 'none'
+        self.reward = 0
+
         # default obstacle positions
         if self.wall_loc == 0:
             self.wall_loc = [[2,2],[2,3],[2,6],[2,7],[5,2],[5,3],[5,6],[5,7],[8,2],[8,3],[8,6],[8,7]]
-         
-         
-         
+
     def init_game(self):
         
         self.game = init_multi_game(self.nx, self.ny, n_players=self.n_players,
@@ -346,8 +355,7 @@ class WhGame:
         
         # check reward and terminal
         self.terminal_reason = 'none'
-    
-    
+
     def init_game_custom(self,fix_loc=[],player_loc=[]):
         """Custom game. Pass through the positions
         1 player only at the mo."""
@@ -375,8 +383,7 @@ class WhGame:
         
         # check reward and terminal
         self.terminal_reason = 'none'
-     
-     
+
     def get_reward(self):
 
         if self.status == 'ok':
@@ -389,8 +396,7 @@ class WhGame:
             self.reward = self.reward_wall
         if self.status == 'no move':
             self.reward = self.reward_no_move
-            
-            
+
     def check_terminal(self):
         
         self.terminal = False
@@ -420,8 +426,6 @@ class WhGame:
             if self.terminal:
                 self.terminal_reason = 'repeated actions'
 
-
-     
     def frame_step(self, a_t, state_ind):
         """Move the player and update the states."""        
         
@@ -492,8 +496,3 @@ def output_sequence_RGB(statess, sdir, n_players = 3):
         rgb = scipy.misc.imresize(rgb,(ny*100,nx*100,3),interp='nearest')
         ii = sdir+'rgb-'+str(ind)+'.jpg'
         scipy.misc.toimage(rgb).save(ii)
-    
-
-
-
-    
