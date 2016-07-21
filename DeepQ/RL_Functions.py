@@ -205,7 +205,7 @@ def train(parameters):
             # Let's run our Q function on S to get Q values for all possible actions
             qval = parameters['model'].predict(state,batch_size=1)
 
-            #c hoose random action, 4 is for up/down/left/right -
+            # choose random action, 4 is for up/down/left/right -
             # the number of possible moves
             if (random.random() < parameters['epsilon']) or frame_number < parameters['observe']: 
                 action = np.random.randint(0,parameters['n_actions'])
@@ -215,6 +215,7 @@ def train(parameters):
 
             # Take action, observe new state S' and get terminal
             # terminal - all items collected, hit wall, hit boundry, repeated actions
+            # still an edge case in multiplayer that needs to be addressed
             x_t, reward, terminal = Game.frame_step(action, cur_ind)
 
             # make the state histroy for player cur_ind
@@ -301,6 +302,7 @@ def train(parameters):
 
         print("Game time %s"% (time.time()-time_start) )
 
+        # keep track of terminal reasons - good for debugging
         parameters['term_reasons'].append(Game.terminal_reason)
 
     print("Finished")
