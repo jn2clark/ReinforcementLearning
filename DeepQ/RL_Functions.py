@@ -145,7 +145,8 @@ def train(parameters):
     parameters['best_score'] = 0
     frame_number = 0
 
-    # number of items and normalisedd number of items collected
+    # ideally we set these outside
+    # number of items and normalised number of items collected
     parameters['n_items_collected'] = []
     parameters['norm_items_collected'] = []
     
@@ -167,6 +168,7 @@ def train(parameters):
                                         n_players=parameters['n_players'],wall_loc=parameters['wall_loc'], 
                                         term_on_collision=parameters['term_on_collision'], n_frames=parameters['n_frames'])
 
+        # set this ti False for 2D only, will need to adjust the input for the netwrok accordingly
         Game.RGB = True
         Game.init_game()
 
@@ -231,9 +233,11 @@ def train(parameters):
                 parameters['replay'].pop(0)
 
             # add in a hacky way of prioritising replay
+            # ideally use a priority queue
             if frame_number > parameters['observe']:
                 # leave some room for the dist width                
                 parameters['dq_errors'].pop(0)
+                # could also do based on std or prob and cdf
                 if dq_error >= 1.1*np.mean(parameters['dq_errors'][-1000:-1]):  
                     parameters['replay'].append(exp_tuple)
                     dq_errors_added.append(dq_error)
@@ -261,14 +265,15 @@ def train(parameters):
                 parameters['model_target'] = transfer_all_weights(parameters['model'],
                                                     parameters['model_target'])
 
-            # store the best model - use previous scores, ideally we would intermitently play the game
-            if np.mean(parameters['norm_items_collected'][-5:]) > parameters['best_score']:
-                parameters['model_best'] = transfer_all_weights(parameters['model'],parameters['model_best'])
-                parameters['best_score'] = np.mean(parameters['norm_items_collected'][-5:])
-                print('^^ Updated best ^^')
-
             # stop playing if we are terminal
-            if terminal: status = 0    
+            if terminal:
+                status = 0
+
+        # store the best model - use previous scores, ideally we would intermittently play the game
+        if np.mean(parameters['norm_items_collected'][-5:]) > parameters['best_score']:
+            parameters['model_best'] = transfer_all_weights(parameters['model'],parameters['model_best'])
+            parameters['best_score'] = np.mean(parameters['norm_items_collected'][-5:])
+            print('^^ Updated best ^^')
 
         # decrement epsilon over games
         if parameters['epsilon'] > parameters['epsilon_min']: 
@@ -276,6 +281,7 @@ def train(parameters):
         else:
             parameters['epsilon'] = parameters['epsilon_min']
 
+        # metrics to keep track of game learning progress
         parameters['norm_items_collected'].append(1.0*Game.game['n_fixes_collected']/Game.game['n_fixes_start'])
         parameters['n_moves_made'].append(moves_game)      
         parameters['n_items_collected'].append(Game.game['n_fixes_collected'])
@@ -328,14 +334,14 @@ def process_minibatch(model, minibatch, model_target=[], gamma=0.9,
             Q_sd_w = model.predict(new_state_m, batch_size=1)
             max_action = (np.argmax(Q_sd_w))
             # get Q for new state with max action Q_sd_maxa old params
-            maxQ = model_target.predict(new_state_m, batch_size=1)[0][max_action]
+            maxQ = Q_sd_wd[0][max_action]
         else:
             # Get max over actions
             maxQ = np.max(Q_sd_wd)
 
         # old q
         y[:] = Q_s_w[:]
-       
+
         if not terminal_m:
             update = (reward_m + (gamma * maxQ))
         else:  # terminal state
