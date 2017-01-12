@@ -50,10 +50,77 @@ def create_model(img_channels, img_rows, img_cols, n_conv1=32, n_conv2=64,
     model.add(Dense(n_actions))
     model.add(Activation('linear'))
     
-    # try cliping or huber loss
+    # try clipping or huber loss
     model.compile(loss=loss, optimizer=adam(lr=lr))
 
-    return model     
+    return model
+
+
+def create_dueling_net(img_channels, img_rows, img_cols, n_conv1=32, n_conv2=64,
+                      n_conv3=64, n_out1=512, n_out2=-1, lr=.001,
+                      n_actions=4, loss='mse', use_perm_drop=False, drop_o=.25):
+
+    def make_output(x):
+        x = -K.mean(x, axis=1, keepdims=True)
+        x = K.tile(x, 4)
+        return x
+
+    def make_output_shape(input_shape):
+        shape = list(input_shape)
+        return tuple(shape)
+
+    def perm_drop(x):
+        return K.dropout(x, .25)
+
+    # input for the netwrok
+    input = Input(shape=(img_channels, img_rows, img_cols))
+
+    # conv layers - shared by both netwroks
+    conv1 = Convolution2D(n_conv1, 5, 5, border_mode='same',subsample=(2,2))(input)
+    prelu1 = PReLU()(conv1)
+
+    conv2 = Convolution2D(n_conv2, 3, 3, border_mode='same',subsample=(2,2))(prelu1)
+    prelu2 = PReLU()(conv2)
+
+    conv3 = Convolution2D(n_conv2, 3, 3, border_mode='same')(prelu2)
+    prelu3 = PReLU()(conv3)
+
+    flatten = Flatten()(prelu3)
+
+    # A(s,a)
+    dense11 = Dense(n_out1)(flatten)
+
+    if not use_perm_drop:
+        prelu31 = PReLU()(dense11)
+    else:
+        prelu310 = PReLU()(dense11)
+        prelu31 = Lambda(perm_drop, output_shape=make_output_shape)(prelu310)
+
+    dense21 = Dense(n_actions)(prelu31)
+    out1 = Activation('linear')(dense21)
+
+    # V(s)
+    dense12 = Dense(n_out1)(flatten)
+    if not use_perm_drop:
+        prelu32 = PReLU()(dense12)
+    else:
+        prelu320 = PReLU()(dense12)
+        prelu32 = Lambda(perm_drop, output_shape=make_output_shape)(prelu320)
+
+    dense22 = Dense(1)(prelu32)
+    out2 = Activation('linear')(dense22)
+    out2 = RepeatVector(n_actions)(out2)
+    out2 = Reshape((n_actions,))(out2)
+
+    # - E[ A(s,a) ]
+    out3 = Lambda(make_output, output_shape=make_output_shape)(out1)
+
+    output = merge([out1, out2, out3], mode='sum', concat_axis=1)
+
+    model = Model(input=input,output=output)
+    model.compile(loss=loss, optimizer=adam(lr=lr))
+
+    return model
 
 
 def save_model(model, m_name):
@@ -135,6 +202,16 @@ def add_to_replay(replay, state, action, reward, new_state, replay_buffer, n_tim
 
     [replay.pop(0) for ind in range(n_times) if len(replay) > replay_buffer]
 
+def sample_minibatch(replay, minibatch_size, priority=False):
+    # priority replay minibatch sampling
+
+    if priority:
+        _,_,_,_,_,dq = zip(*replay)
+        probs = np.array(dq)/sum(dq)
+        inds = np.random.choice(range(len(replay)),minibatch_size,p=probs)
+        return [replay[ind] for ind in inds]
+    else:
+        return random.sample(replay, minibatch_size)
 
 def train(parameters):
     """
@@ -227,29 +304,30 @@ def train(parameters):
             parameters['dq_errors'].append(dq_error)
 
             # experience replay
-            exp_tuple = (state.copy(), action, reward, new_state.copy(), terminal)
+            exp_tuple = (state.copy(), action, reward, new_state.copy(), terminal, dq_error)
             parameters['replay'].append(exp_tuple)
             # check replay size
             if len(parameters['replay']) > parameters['replay_buffer']:
                 parameters['replay'].pop(0)
 
-            # add in a hacky way of prioritising replay
-            # ideally use a priority queue
-            if frame_number > parameters['observe']:
-                # leave some room for the dist width                
-                parameters['dq_errors'].pop(0)
-                # could also do based on std or prob and cdf
-                if dq_error >= 1.1*np.mean(parameters['dq_errors'][-1000:-1]):  
-                    parameters['replay'].append(exp_tuple)
-                    dq_errors_added.append(dq_error)
-                                        
-                    if len(parameters['replay']) > parameters['replay_buffer']:
-                        parameters['replay'].pop(0)
+            # # add in a hacky way of prioritising replay
+            # # ideally use a priority queue
+            # if frame_number > parameters['observe']:
+            #     # leave some room for the dist width
+            #     parameters['dq_errors'].pop(0)
+            #     # could also do based on std or prob and cdf
+            #     if dq_error >= 1.1*np.mean(parameters['dq_errors'][-1000:-1]):
+            #         parameters['replay'].append(exp_tuple)
+            #         dq_errors_added.append(dq_error)
+            #
+            #         if len(parameters['replay']) > parameters['replay_buffer']:
+            #             parameters['replay'].pop(0)
 
             # are we done observing?
             if frame_number > parameters['observe']:        
                 # randomly sample the exp replay memory (could add better choice here)
-                minibatch = random.sample(parameters['replay'], parameters['batch_size'])
+                # minibatch = random.sample(parameters['replay'], parameters['batch_size'])
+                minibatch = sample_minibatch(parameters['replay'], parameters['batch_size'], priority=True)
 
                 X_train, y_train = process_minibatch(parameters['model'],minibatch,model_target=parameters['model_target'],
                                                                    n_actions=parameters['n_actions'], 
